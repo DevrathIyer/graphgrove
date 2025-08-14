@@ -46,7 +46,7 @@ protected:
     bool use_nesting = false;
 
 public:
-    static std::map<int,std::atomic<unsigned>> dist_count;
+    //static std::map<int,std::atomic<unsigned>> dist_count;
     /*** structure for each node ***/
     struct Node
     {

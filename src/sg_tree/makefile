@@ -17,7 +17,7 @@ CDIR = ../commons
 IDIR = ../../lib
 MKLROOT=/opt/intel/mkl
 
-DEBUG = -g -DPRINTVER
+DEBUG = -g 
 #-DNDEBUG
 #-g
 

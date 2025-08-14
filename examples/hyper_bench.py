@@ -132,10 +132,17 @@ b_t = gt() - t
 print("Building time:", b_t, "seconds")
 with open(f'ct_{base:0.2f}_{scale}.bin', 'wb+') as f:
     f.write(ct.serialize())
+"""
 with open(f'ct_{base:0.2f}_{scale}.bin', 'rb') as f:
     ct = SGTree_NNS_L2.from_string(f.read())
-print(ct.root.level)
-print(q.shape)
+"""
+q_data = np.array([hyper_query[q[0]]])
+res = ct.NearestNeighbour(q_data, use_multi_core=0)
+print(res)
+res = ct.kNearestNeighbours(q_data, 10, use_multi_core=0)
+print(res)
 test_index(ct, hyper_pass, hyper_query, q[-1024:], a=a)
+"""
 test_index(ct, hyper_pass, hyper_query, q[:1024], a=a)
+"""
 

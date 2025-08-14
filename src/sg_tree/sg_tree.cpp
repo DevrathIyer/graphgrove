@@ -27,7 +27,6 @@ scalar* SGTree::compute_pow_table(scalar base)
 }
 
 scalar* SGTree::powdict;
-std::map<int, std::atomic<unsigned>> SGTree::dist_count;
 
 /******************************* Insert ***********************************************/
 bool SGTree::insert(SGTree::Node* current, const pointType& p, unsigned UID, scalar dist_current)
@@ -365,7 +364,6 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::kNearestNeighbours(const p
         local_dists.resize(num_children);
         std::iota(local_idx.begin(), local_idx.end(), 0);
         for (unsigned i = 0; i < num_children; ++i){
-	    //dist_count[curNode->level + 1].fetch_add(1, std::memory_order_relaxed);
             local_dists[i] = curNode->children[i]->dist(p, pnorm1);
         }
         std::sort(local_idx.begin(), local_idx.end(), comp_x);
@@ -379,7 +377,7 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::kNearestNeighbours(const p
                 travel.emplace_back(child, dist_child);
         }
     }
-    //std::cerr << "Done with one point" << std::endl;
+    std::cerr << "Done with one point" << std::endl;
     return nnList;
 }
 
@@ -907,7 +905,7 @@ SGTree::~SGTree()
 //contructor: using matrix in col-major form!
 SGTree* SGTree::from_matrix(const Eigen::Map<matrixType>& pMatrix, int truncate /*=-1*/, unsigned cores /*=true*/, scalar base /*1.3*/, int scale_val /*20*/ )
 {
-    std::cout << "SG Tree [v00H5] with base " << base << ", scale " << scale_val << std::endl;
+    std::cout << "SG Tree [v00H6] with base " << base << ", scale " << scale_val << std::endl;
     std::cout << "SG Tree with Number of Cores: " << cores << std::endl;
     SGTree* cTree = new SGTree(pMatrix, truncate, cores, base, scale_val);
     return cTree;

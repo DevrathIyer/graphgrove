@@ -16,7 +16,6 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #define PY_SSIZE_T_CLEAN
-#define PRINTVER
 
 #include <Python.h>
 #include "numpy/arrayobject.h"
@@ -189,7 +188,7 @@ static PyObject *sgtreec_nn(PyObject *self, PyObject *args) {
   obj = reinterpret_cast< SGTree * >(int_ptr);
 
   #ifdef PRINTVER
-  SGTree::dist_count.clear();
+  //SGTree::dist_count.clear();
   #endif
 
   scalar *dist = new scalar[numPoints];
@@ -263,9 +262,11 @@ static PyObject *sgtreec_nn(PyObject *self, PyObject *args) {
 
     return_value = Py_BuildValue("NN", out_indices, out_dist);
   }
-
+	
+  /*
   #ifdef PRINTVER
   unsigned long tot_comp = 0;
+
   for(auto const& qc : SGTree::dist_count)
   {
     std::cout << "Average number of distance computations at level: " << qc.first << " = " << 1.0 * (qc.second.load())/numPoints << std::endl;
@@ -273,6 +274,7 @@ static PyObject *sgtreec_nn(PyObject *self, PyObject *args) {
   }
   std::cout << "Average number of distance computations: " << 1.0*tot_comp/numPoints << std::endl;
   #endif
+  */
 
   return return_value;
 }
@@ -302,7 +304,7 @@ static PyObject *sgtreec_knn(PyObject *self, PyObject *args) {
   obj = reinterpret_cast< SGTree * >(int_ptr);
 
   #ifdef PRINTVER
-  SGTree::dist_count.clear();
+  //SGTree::dist_count.clear();
   #endif
 
   // std::cout << "use_multi_core (sgtreec_knn) = " << use_multi_core << std::endl;
@@ -394,7 +396,8 @@ static PyObject *sgtreec_knn(PyObject *self, PyObject *args) {
     }
     return_value = Py_BuildValue("NN", out_indices, out_dist);
   }
-
+	
+  /*
   #ifdef PRINTVER
   unsigned long tot_comp = 0;
   for(auto const& qc : SGTree::dist_count)
@@ -404,6 +407,7 @@ static PyObject *sgtreec_knn(PyObject *self, PyObject *args) {
   }
   std::cout << "Average number of distance computations: " << 1.0*tot_comp/numPoints << std::endl;
   #endif
+  */
 
   return return_value;
 }
@@ -434,7 +438,7 @@ static PyObject *sgtreec_knn_beam(PyObject *self, PyObject *args) {
   obj = reinterpret_cast< SGTree * >(int_ptr);
 
   #ifdef PRINTVER
-  SGTree::dist_count.clear();
+  //SGTree::dist_count.clear();
   #endif
 
   // std::cout << "use_multi_core (sgtreec_knn) = " << use_multi_core << std::endl;
@@ -523,7 +527,8 @@ static PyObject *sgtreec_knn_beam(PyObject *self, PyObject *args) {
     }
     return_value = Py_BuildValue("NN", out_indices, out_dist);
   }
-
+  
+  /*
   #ifdef PRINTVER
   unsigned long tot_comp = 0;
   for(auto const& qc : SGTree::dist_count)
@@ -533,6 +538,7 @@ static PyObject *sgtreec_knn_beam(PyObject *self, PyObject *args) {
   }
   std::cout << "Average number of distance computations: " << 1.0*tot_comp/numPoints << std::endl;
   #endif
+  */
 
   return return_value;
 }
@@ -562,7 +568,7 @@ static PyObject *sgtreec_range(PyObject *self, PyObject *args) {
   obj = reinterpret_cast< SGTree * >(int_ptr);
 
   #ifdef PRINTVER
-  SGTree::dist_count.clear();
+  //SGTree::dist_count.clear();
   #endif
 
   PyObject *indices = PyList_New(numPoints);
@@ -692,7 +698,8 @@ static PyObject *sgtreec_range(PyObject *self, PyObject *args) {
     }
     return_value = Py_BuildValue("NN", indices, dist);
   }
-
+ 
+  /* 
   #ifdef PRINTVER
   unsigned long tot_comp = 0;
   for(auto const& qc : SGTree::dist_count)
@@ -702,6 +709,7 @@ static PyObject *sgtreec_range(PyObject *self, PyObject *args) {
   }
   std::cout << "Average number of distance computations: " << 1.0*tot_comp/numPoints << std::endl;
   #endif
+  */ 
 
   return return_value;
 }
