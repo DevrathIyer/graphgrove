@@ -73,8 +73,8 @@ class NNS_L2(object):
     return sgtreec.size(self.this)
 
   @classmethod
-  def from_matrix(cls, points, trunc=-1, use_multi_core=-1):
-    ptr = sgtreec.new(points, trunc, use_multi_core)
+  def from_matrix(cls, points, trunc=-1, use_multi_core=-1, base=1.3, scale=20):
+    ptr = sgtreec.new(points, trunc, use_multi_core, base, scale)
     return cls(ptr)
 
   @classmethod

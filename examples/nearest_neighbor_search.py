@@ -30,8 +30,8 @@ np.random.seed(123)
 cores = 4
 
 print('======== Building Dataset ==========')
-N=1000
-K=10
+N=10000
+K=100
 D=784
 means = 20*np.random.rand(K,D) - 10
 x = np.vstack([np.random.randn(N,D) + means[i] for i in range(K)])

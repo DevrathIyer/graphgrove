@@ -42,8 +42,8 @@ class build_ext(_build_ext):
 sgtreec_module = Extension('sgtreec',
         sources = ['src/sg_tree/sgtreecmodule.cxx', 'src/sg_tree/utils.cpp',  'src/sg_tree/sg_tree.cpp'],
         include_dirs=['lib/'],
-        extra_compile_args=['-march=corei7-avx', '-pthread', '-std=c++14'], #, '-DPRINTVER'], #, '-D_FLOAT64_VER_'],
-        extra_link_args=['-march=corei7-avx', '-pthread', '-std=c++14'] #,'-DPRINTVER'] #, '-D_FLOAT64_VER_'], #'-D_FLOAT64_VER_', '-DPRINTVER'
+        extra_compile_args=['-march=corei7-avx', '-pthread', '-std=c++14', '-DPRINTVER'], #, '-D_FLOAT64_VER_'],
+        extra_link_args=['-march=corei7-avx', '-pthread', '-std=c++14','-DPRINTVER'] #, '-D_FLOAT64_VER_'], #'-D_FLOAT64_VER_', '-DPRINTVER'
 )
 
 covertreec_module = Extension('covertreec',

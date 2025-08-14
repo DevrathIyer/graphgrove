@@ -16,6 +16,7 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #define PY_SSIZE_T_CLEAN
+#define PRINTVER
 
 #include <Python.h>
 #include "numpy/arrayobject.h"
@@ -33,9 +34,11 @@ static PyObject *new_sgtreec(PyObject *self, PyObject *args)
 {
   int trunc;
   long use_multi_core;
+  scalar base;
+  int scale;
   PyArrayObject *in_array;
 
-  if (!PyArg_ParseTuple(args,"O!il:new_sgtreec", &PyArray_Type, &in_array, &trunc, &use_multi_core))
+  if (!PyArg_ParseTuple(args,"O!ilfi:new_sgtreec", &PyArray_Type, &in_array, &trunc, &use_multi_core, &base, &scale))
     return NULL;
 
   npy_intp numPoints = PyArray_DIM(in_array, 0);
@@ -45,7 +48,7 @@ static PyObject *new_sgtreec(PyObject *self, PyObject *args)
   scalar * fnp = reinterpret_cast< scalar * >( PyArray_GetPtr(in_array, idx) );
   Eigen::Map<matrixType> pointMatrix(fnp, numDims, numPoints);
 
-  SGTree* cTree = SGTree::from_matrix(pointMatrix, trunc, use_multi_core);
+  SGTree* cTree = SGTree::from_matrix(pointMatrix, trunc, use_multi_core, base, scale);
   size_t int_ptr = reinterpret_cast< size_t >(cTree);
   size_t node_ptr = reinterpret_cast< size_t >(cTree->get_root());
 
@@ -186,7 +189,7 @@ static PyObject *sgtreec_nn(PyObject *self, PyObject *args) {
   obj = reinterpret_cast< SGTree * >(int_ptr);
 
   #ifdef PRINTVER
-  SGTree::Node::dist_count.clear();
+  SGTree::dist_count.clear();
   #endif
 
   scalar *dist = new scalar[numPoints];
@@ -263,7 +266,7 @@ static PyObject *sgtreec_nn(PyObject *self, PyObject *args) {
 
   #ifdef PRINTVER
   unsigned long tot_comp = 0;
-  for(auto const& qc : SGTree::Node::dist_count)
+  for(auto const& qc : SGTree::dist_count)
   {
     std::cout << "Average number of distance computations at level: " << qc.first << " = " << 1.0 * (qc.second.load())/numPoints << std::endl;
     tot_comp += qc.second.load();
@@ -299,7 +302,7 @@ static PyObject *sgtreec_knn(PyObject *self, PyObject *args) {
   obj = reinterpret_cast< SGTree * >(int_ptr);
 
   #ifdef PRINTVER
-  SGTree::Node::dist_count.clear();
+  SGTree::dist_count.clear();
   #endif
 
   // std::cout << "use_multi_core (sgtreec_knn) = " << use_multi_core << std::endl;
@@ -359,8 +362,10 @@ static PyObject *sgtreec_knn(PyObject *self, PyObject *args) {
   }
   else
   {
+    std::cout << "Return points is Null" << std::endl;
     if(use_multi_core > 0)
     {
+	std::cout << "Multicore is greater than 0:" << use_multi_core << std::endl;
         utils::parallel_for_progressbar(0, numPoints, [&](npy_intp i)->void{
             std::vector<std::pair<SGTree::Node*, scalar>> ct_nn = obj->kNearestNeighbours(queryPts.col(i), k);
             npy_intp offset = k*i;
@@ -373,9 +378,12 @@ static PyObject *sgtreec_knn(PyObject *self, PyObject *args) {
     }
     else
     {
+	std::cout << "Multicore is less than 0:" << use_multi_core << std::endl;
         for(npy_intp i = 0; i < numPoints; ++i) {
-            utils::progressbar(i, numPoints);
+	    //utils::progressbar(i, numPoints);
+   	    std::cout << "Point " << i << std::endl;
             std::vector<std::pair<SGTree::Node*, scalar>> ct_nn = obj->kNearestNeighbours(queryPts.col(i), k);
+   	    std::cout << "SG_Tree returned for point " << i << std::endl;
             npy_intp offset = k*i;
             for(long t=0; t<k; ++t)
             {
@@ -389,7 +397,7 @@ static PyObject *sgtreec_knn(PyObject *self, PyObject *args) {
 
   #ifdef PRINTVER
   unsigned long tot_comp = 0;
-  for(auto const& qc : SGTree::Node::dist_count)
+  for(auto const& qc : SGTree::dist_count)
   {
     std::cout << "Average number of distance computations at level: " << qc.first << " = " << 1.0 * (qc.second.load())/numPoints << std::endl;
     tot_comp += qc.second.load();
@@ -426,7 +434,7 @@ static PyObject *sgtreec_knn_beam(PyObject *self, PyObject *args) {
   obj = reinterpret_cast< SGTree * >(int_ptr);
 
   #ifdef PRINTVER
-  SGTree::Node::dist_count.clear();
+  SGTree::dist_count.clear();
   #endif
 
   // std::cout << "use_multi_core (sgtreec_knn) = " << use_multi_core << std::endl;
@@ -518,7 +526,7 @@ static PyObject *sgtreec_knn_beam(PyObject *self, PyObject *args) {
 
   #ifdef PRINTVER
   unsigned long tot_comp = 0;
-  for(auto const& qc : SGTree::Node::dist_count)
+  for(auto const& qc : SGTree::dist_count)
   {
     std::cout << "Average number of distance computations at level: " << qc.first << " = " << 1.0 * (qc.second.load())/numPoints << std::endl;
     tot_comp += qc.second.load();
@@ -554,7 +562,7 @@ static PyObject *sgtreec_range(PyObject *self, PyObject *args) {
   obj = reinterpret_cast< SGTree * >(int_ptr);
 
   #ifdef PRINTVER
-  SGTree::Node::dist_count.clear();
+  SGTree::dist_count.clear();
   #endif
 
   PyObject *indices = PyList_New(numPoints);
@@ -687,7 +695,7 @@ static PyObject *sgtreec_range(PyObject *self, PyObject *args) {
 
   #ifdef PRINTVER
   unsigned long tot_comp = 0;
-  for(auto const& qc : SGTree::Node::dist_count)
+  for(auto const& qc : SGTree::dist_count)
   {
     std::cout << "Average number of distance computations at level: " << qc.first << " = " << 1.0 * (qc.second.load())/numPoints << std::endl;
     tot_comp += qc.second.load();

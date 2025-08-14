@@ -18,26 +18,24 @@
 #include "sg_tree.h"
 #include <iostream>
 
-scalar* SGTree::compute_pow_table()
+scalar* SGTree::compute_pow_table(scalar base)
 {
     scalar* powdict = new scalar[2048];
     for (int i = 0; i < 2048; ++i)
-        powdict[i] = (scalar) pow(SGTree::base, i - 1024);
+        powdict[i] = (scalar) pow(base, i - 1024);
     return powdict;
 }
 
-scalar* SGTree::powdict = compute_pow_table();
-
-#ifdef PRINTVER
-std::map<int, std::atomic<unsigned>> SGTree::Node::dist_count;
-#endif
+scalar* SGTree::powdict;
+std::map<int, std::atomic<unsigned>> SGTree::dist_count;
 
 /******************************* Insert ***********************************************/
 bool SGTree::insert(SGTree::Node* current, const pointType& p, unsigned UID, scalar dist_current)
 {
+    scalar pnorm1 = 1 - p.norm();
     bool result = false;
 #ifdef DEBUG
-    if (current->dist(p) > current->covdist())
+    if (current->dist(p, pnorm1) > current->covdist())
         throw std::runtime_error("Internal insert got wrong input!");
     if (truncateLevel > 0 && current->level < maxScale - truncateLevel)
     {
@@ -63,7 +61,7 @@ bool SGTree::insert(SGTree::Node* current, const pointType& p, unsigned UID, sca
         // already exists in the tree structure. 
         if (current->children[i]->UID != current->UID)
         {
-            temp_dist = current->children[i]->dist(p);
+            temp_dist = current->children[i]->dist(p, pnorm1);
         } 
         else 
         {
@@ -80,7 +78,7 @@ bool SGTree::insert(SGTree::Node* current, const pointType& p, unsigned UID, sca
     {
         //release read lock then enter child
         current->mut.unlock_shared();
-        std::cout << "Duplicate entry!!!" << std::endl;
+	//std::cout << "Duplicate entry!!!" << std::endl;
         // std::cout << current->children[child_idx]->_p << std::endl;
         // std::cout << p << std::endl;
     }
@@ -96,7 +94,7 @@ bool SGTree::insert(SGTree::Node* current, const pointType& p, unsigned UID, sca
         {
             // create a new child, a copy of the current node (with new id, but same UID)
             int new_id = N++;
-            Node * new_child = current->setChild(current->_p, current->UID, new_id);
+            Node * new_child = current->setChild(current->_p, current->_pnorm1, current->UID, new_id);
             result = true;
             current->mut.unlock();
 
@@ -134,7 +132,7 @@ bool SGTree::insert(SGTree::Node* current, const pointType& p, unsigned UID, sca
         if (num_children==current->children.size())
         {
             int new_id = N++;
-            current->setChild(p, UID, new_id);
+            current->setChild(p, pnorm1, UID, new_id);
             result = true;
             current->mut.unlock();
 
@@ -192,24 +190,25 @@ void SGTree::calc_maxdist()
 
 bool SGTree::insert(const pointType& p, unsigned UID)
 {
+    scalar pnorm1 = 1 - p.norm();
     bool result = false;
     id_valid = false;
     global_mut.lock_shared();
-    scalar curr_root_dist = root->dist(p);
+    scalar curr_root_dist = root->dist(p, pnorm1);
     if (curr_root_dist <= 0.0)
     {
-        std::cout << "Duplicate entry!!!" << std::endl;
+        //std::cout << "Duplicate entry!!!" << std::endl;
         // std::cout << root->_p << std::endl;
         // std::cout << p << std::endl;
     }
     else if (curr_root_dist > root->covdist())
     {
-        std::cout<<"Entered case 1: " << root->dist(p) << " " << root->covdist() << " " << root->level <<std::endl;
+        std::cout<<"Entered case 1: " << root->dist(p, pnorm1) << " " << root->covdist() << " " << root->level <<std::endl;
         std::pair<SGTree::Node*, scalar> fn = FurthestNeighbour(p);
         global_mut.unlock_shared();
         std::cout<<"Requesting global lock!" <<std::endl;
         global_mut.lock();
-        while (root->dist(p) > base * root->covdist()/(base-1))
+        while (root->dist(p, pnorm1) > base * root->covdist()/(base-1))
         {
             SGTree::Node* current = root;
             SGTree::Node* parent = NULL;
@@ -234,6 +233,7 @@ bool SGTree::insert(const pointType& p, unsigned UID)
         }
         SGTree::Node* temp = new SGTree::Node;
         temp->_p = p;
+        temp->_pnorm1 = pnorm1;
         temp->level = root->level + 1;
         temp->ID = N++;
         temp->UID = UID;
@@ -264,7 +264,8 @@ bool SGTree::insert(const pointType& p, unsigned UID)
 
 std::pair<SGTree::Node*, scalar> SGTree::NearestNeighbour(const pointType &p) const
 {
-    std::pair<SGTree::Node*, scalar> nn(root, root->dist(p));
+    scalar pnorm1 = 1 - p.norm();
+    std::pair<SGTree::Node*, scalar> nn(root, root->dist(p, pnorm1));
     std::vector<std::pair<SGTree::Node*, scalar>> travel;
     SGTree::Node* curNode;
     scalar curDist;
@@ -298,7 +299,7 @@ std::pair<SGTree::Node*, scalar> SGTree::NearestNeighbour(const pointType &p) co
         local_dists.resize(num_children);
         std::iota(local_idx.begin(), local_idx.end(), 0);
         for (unsigned i = 0; i < num_children; ++i)
-            local_dists[i] = curNode->children[i]->dist(p);
+            local_dists[i] = curNode->children[i]->dist(p, pnorm1);
         std::sort(std::begin(local_idx), std::end(local_idx), comp_x);
 
         const scalar best_dist_now = nn.second;
@@ -318,6 +319,7 @@ std::pair<SGTree::Node*, scalar> SGTree::NearestNeighbour(const pointType &p) co
 
 std::vector<std::pair<SGTree::Node*, scalar>> SGTree::kNearestNeighbours(const pointType &p, unsigned numNbrs) const
 {
+    scalar pnorm1 = 1 - p.norm();
     // Do the worst initialization
     std::pair<SGTree::Node*, scalar> dummy(NULL, std::numeric_limits<scalar>::max());
     // List of k-nearest points till now
@@ -335,7 +337,7 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::kNearestNeighbours(const p
     auto comp_pair = [](std::pair<SGTree::Node*, scalar> a, std::pair<SGTree::Node*, scalar> b) { return a.second < b.second; };
 
     // Initialize with root
-    travel.emplace_back(root, root->dist(p));
+    travel.emplace_back(root, root->dist(p, pnorm1));
 
     // Pop, print and then push the children
     while (travel.size() > 0)
@@ -363,7 +365,8 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::kNearestNeighbours(const p
         local_dists.resize(num_children);
         std::iota(local_idx.begin(), local_idx.end(), 0);
         for (unsigned i = 0; i < num_children; ++i){
-            local_dists[i] = curNode->children[i]->dist(p);
+	    //dist_count[curNode->level + 1].fetch_add(1, std::memory_order_relaxed);
+            local_dists[i] = curNode->children[i]->dist(p, pnorm1);
         }
         std::sort(local_idx.begin(), local_idx.end(), comp_x);
 
@@ -383,6 +386,7 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::kNearestNeighbours(const p
 
 std::vector<std::pair<SGTree::Node*, scalar>> SGTree::kNearestNeighboursBeam(const pointType &p, unsigned numNbrs, unsigned beamSize) const
 {
+    scalar pnorm1 = 1 - p.norm();
     // Do the worst initialization
     std::pair<SGTree::Node*, scalar> dummy(NULL, std::numeric_limits<scalar>::max());
     // List of k-nearest points till now
@@ -401,7 +405,7 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::kNearestNeighboursBeam(con
     auto comp_pair = [](std::pair<SGTree::Node*, scalar> a, std::pair<SGTree::Node*, scalar> b) { return a.second < b.second; };
 
     // Initialize with root
-    travel.emplace_back(root, root->dist(p));
+    travel.emplace_back(root, root->dist(p, pnorm1));
 
     // Pop, print and then push the children
     while (travel.size() > 0)
@@ -429,7 +433,7 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::kNearestNeighboursBeam(con
         local_dists.resize(num_children);
         std::iota(local_idx.begin(), local_idx.end(), 0);
         for (unsigned i = 0; i < num_children; ++i){
-            local_dists[i] = curNode->children[i]->dist(p);
+            local_dists[i] = curNode->children[i]->dist(p, pnorm1);
         }
         std::sort(local_idx.begin(), local_idx.end(), comp_x);
 
@@ -462,6 +466,7 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::kNearestNeighboursBeam(con
 
 std::vector<std::pair<SGTree::Node*, scalar>> SGTree::rangeNeighbours(const pointType &p, scalar range) const
 {
+    scalar pnorm1 = 1 - p.norm();
     // List of nearest neighbors in the range
     std::vector<std::pair<SGTree::Node*, scalar>> nnList;
 
@@ -476,7 +481,7 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::rangeNeighbours(const poin
     auto comp_x = [&local_dists](int a, int b) { return local_dists[a] > local_dists[b]; };
 
     // Initialize with root
-    travel.emplace_back(root, root->dist(p));
+    travel.emplace_back(root, root->dist(p, pnorm1));
 
     // Pop, print and then push the children
     while (travel.size() > 0)
@@ -499,7 +504,7 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::rangeNeighbours(const poin
         local_dists.resize(num_children);
         std::iota(local_idx.begin(), local_idx.end(), 0);
         for (unsigned i = 0; i < num_children; ++i)
-            local_dists[i] = curNode->children[i]->dist(p);
+            local_dists[i] = curNode->children[i]->dist(p, pnorm1);
         std::sort(local_idx.begin(), local_idx.end(), comp_x);
 
         for (const auto& child_idx : local_idx)
@@ -518,7 +523,8 @@ std::vector<std::pair<SGTree::Node*, scalar>> SGTree::rangeNeighbours(const poin
 
 std::pair<SGTree::Node*, scalar> SGTree::FurthestNeighbour(const pointType &p) const
 {
-    std::pair<SGTree::Node*, scalar> fn(root, root->dist(p));
+    scalar pnorm1 = 1 - p.norm();
+    std::pair<SGTree::Node*, scalar> fn(root, root->dist(p, pnorm1));
     std::vector<std::pair<SGTree::Node*, scalar>> travel;
     SGTree::Node* curNode;
     scalar curDist;
@@ -552,7 +558,7 @@ std::pair<SGTree::Node*, scalar> SGTree::FurthestNeighbour(const pointType &p) c
         local_dists.resize(num_children);
         std::iota(local_idx.begin(), local_idx.end(), 0);
         for (unsigned i = 0; i < num_children; ++i)
-            local_dists[i] = curNode->children[i]->dist(p);
+            local_dists[i] = curNode->children[i]->dist(p, pnorm1);
         std::sort(std::begin(local_idx), std::end(local_idx), comp_x);
 
         for (const auto& child_idx : local_idx)
@@ -680,7 +686,7 @@ size_t SGTree::msg_size() const
 char* SGTree::serialize() const
 {
     //Covert following to char* buff with following order
-    // N | D | (points, levels) | List
+    // N | D | base | (points, levels) | List
     char* buff = new char[msg_size()];
 
     char* pos = buff;
@@ -697,6 +703,13 @@ char* SGTree::serialize() const
     start = (char*)&(D);
     end = start + shift;
     std::copy(start, end, pos);
+    pos += shift;
+
+    // insert D
+    shift = sizeof(scalar);
+    scalar* start_s = (scalar*)&(base);
+    scalar* end_s = start_s + shift;
+    std::copy(start_s, end_s, pos);
     pos += shift;
 
     // insert points and level
@@ -719,6 +732,8 @@ void SGTree::deserialize(char* buff)
     buff += sizeof(unsigned);
     D = *((unsigned *)buff);
     buff += sizeof(unsigned);
+    base = *((scalar *)buff);
+    buff += sizeof(scalar);
 
     //std::cout << "N: " << N << ", D: " << D << std::endl;
 
@@ -756,6 +771,7 @@ SGTree::SGTree(const pointType& p, int truncateArg /*=-1*/)
 
     root = new SGTree::Node;
     root->_p = p;
+    root->_pnorm1 = 1 - p.norm();
     root->ID = 0;
     root->UID = 0;
     root->level = 0;
@@ -763,15 +779,17 @@ SGTree::SGTree(const pointType& p, int truncateArg /*=-1*/)
 }
 
 //constructor: cover tree using points in the list between begin and end
-SGTree::SGTree(const Eigen::Map<matrixType>& pMatrix, int truncateArg /*=-1*/, unsigned cores /*=true*/)
+SGTree::SGTree(const Eigen::Map<matrixType>& pMatrix, int truncateArg /*=-1*/, unsigned cores /*=true*/, scalar base, int scale_val)
 {
     size_t numPoints = pMatrix.cols();
     bool use_multi_core = cores > 1;
     this->cores = cores;
+    this->base = base;
 
+    powdict = compute_pow_table(base);
     //1. Compute the mean of entire data
     pointType mx = utils::ParallelAddMatrixNP(pMatrix).get_result()/(1.0*numPoints);
-
+    
     //2. Compute distance of every point from the mean || Variance
     pointType dists = utils::ParallelDistanceComputeNP(pMatrix, mx).get_result();
 
@@ -789,7 +807,7 @@ SGTree::SGTree(const Eigen::Map<matrixType>& pMatrix, int truncateArg /*=-1*/, u
     dists = utils::ParallelDistanceComputeNP(pMatrix, mx).get_result();
     scalar max_dist = dists.maxCoeff();
 
-    int scale_val = int(std::ceil(std::log(max_dist)/std::log(base)));
+    //int scale_val = int(std::ceil(std::log(max_dist)/std::log(base)));
     std::cout<<"Scale chosen: " << scale_val << std::endl;
     min_scale = scale_val; //-1000;
     max_scale = scale_val; //-1000;
@@ -799,6 +817,7 @@ SGTree::SGTree(const Eigen::Map<matrixType>& pMatrix, int truncateArg /*=-1*/, u
 
     root = new SGTree::Node;
     root->_p = mx;
+    root->_pnorm1 = 1 - mx.norm();
     root->level = scale_val; //-1000;
     root->maxdistUB = max_dist; // powdict[scale_val+1024];
     root->ID = 0;
@@ -812,8 +831,11 @@ SGTree::SGTree(const Eigen::Map<matrixType>& pMatrix, int truncateArg /*=-1*/, u
             for (size_t i = 0; i < numPoints-1; ++i){
                 // std::cout << "Insert i " << i << " idx[i] " << idx[i] << std::endl;
                 utils::progressbar(i, numPoints);
-                if(!insert(pMatrix.col(idx[i]), idx[i]))
+		insert(pMatrix.col(idx[i]), idx[i]);
+		/*
+                if(!)
                     std::cout << "Insert failed!!! " << idx[i] << std::endl;
+		*/
             }
         }
         else
@@ -821,15 +843,22 @@ SGTree::SGTree(const Eigen::Map<matrixType>& pMatrix, int truncateArg /*=-1*/, u
             for (size_t i = 0; i < 50000; ++i){
                 // std::cout << "Insert i " << i << " idx[i] " << idx[i] << std::endl;
                 utils::progressbar(i, 50000);
+		insert(pMatrix.col(idx[i]), idx[i]);
+		/*	
                 if(!insert(pMatrix.col(idx[i]), idx[i]))
                     std::cout << "Insert failed!!! " << idx[i] << std::endl;
+		*/	
             }
             utils::progressbar(50000, 50000);
+	    print_stats();
             std::cerr<<std::endl;
             utils::parallel_for_progressbar(50000, numPoints-1, [&](size_t i)->void{
                 // std::cout << "Insert i " << i << " idx[i] " << idx[i] << std::endl;
+		insert(pMatrix.col(idx[i]), idx[i]);
+		/*	
                 if(!insert(pMatrix.col(idx[i]), idx[i]))
                     std::cout << "Insert failed!!! " << idx[i] << std::endl;
+		*/	
             }, cores);
         }
     }
@@ -837,12 +866,15 @@ SGTree::SGTree(const Eigen::Map<matrixType>& pMatrix, int truncateArg /*=-1*/, u
     {
         for (size_t i = 0; i < numPoints-1; ++i){
             utils::progressbar(i, numPoints);
+	    insert(pMatrix.col(idx[i]), idx[i]);
+	    /*
             if(!insert(pMatrix.col(idx[i]), idx[i]))
                 std::cout << "Insert failed!!! " << idx[i] <<  std::endl;
+	    */
         }
     }
    // calc_maxdist();
-   // print_stats();
+   print_stats();
 }
 
 
@@ -873,11 +905,11 @@ SGTree::~SGTree()
 /****************************** Public API for creation of Cover Trees *************************************/
 
 //contructor: using matrix in col-major form!
-SGTree* SGTree::from_matrix(const Eigen::Map<matrixType>& pMatrix, int truncate /*=-1*/, unsigned cores /*=true*/)
+SGTree* SGTree::from_matrix(const Eigen::Map<matrixType>& pMatrix, int truncate /*=-1*/, unsigned cores /*=true*/, scalar base /*1.3*/, int scale_val /*20*/ )
 {
-    std::cout << "SG Tree [v008] with base " << SGTree::base << std::endl;
+    std::cout << "SG Tree [v00H5] with base " << base << ", scale " << scale_val << std::endl;
     std::cout << "SG Tree with Number of Cores: " << cores << std::endl;
-    SGTree* cTree = new SGTree(pMatrix, truncate, cores);
+    SGTree* cTree = new SGTree(pMatrix, truncate, cores, base, scale_val);
     return cTree;
 }
 

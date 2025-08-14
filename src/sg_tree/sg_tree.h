@@ -17,6 +17,7 @@
 # ifndef _SG_TREE_H
 # define _SG_TREE_H
 
+
 #include <Eigen/Core>
 #include <atomic>
 #include <fstream>
@@ -36,17 +37,21 @@ class SGTree
 /************************* Internal Functions ***********************************************/
 protected:
     /*** Base to use for the calculations ***/
-    static constexpr scalar base = 1.3;
-    static scalar* compute_pow_table();
+    //static constexpr scalar base = 2;
+    //
+    scalar base;
+    static scalar* compute_pow_table(scalar base);
     static scalar* powdict;
     unsigned cores = -1;
     bool use_nesting = false;
 
 public:
+    static std::map<int,std::atomic<unsigned>> dist_count;
     /*** structure for each node ***/
     struct Node
     {
         pointType _p;                       // point associated with the node
+	scalar _pnorm1;			    // 1 - norm of _p
         std::vector<Node*> children;        // list of children
         int level;                          // current level of the node
         scalar maxdistUB;                   // upper bound of distance to any of descendants
@@ -56,9 +61,6 @@ public:
 
         mutable std::shared_timed_mutex mut;// lock for current node
 
-        #ifdef PRINTVER
-        static std::map<int,std::atomic<unsigned>> dist_count;
-        #endif
 
         /*** Node modifiers ***/
         scalar covdist() const                   // covering distance of subtree at current node
@@ -69,28 +71,27 @@ public:
         {
             return powdict[level + 1023];
         }
-        scalar dist(const pointType& pp) const   // L2 distance between current node and point pp
+
+        scalar dist(const pointType& pp, scalar ppnorm1) const   // L2 distance between current node and point pp
         {
-            #ifdef PRINTVER
-            dist_count[level].fetch_add(1, std::memory_order_relaxed);
-            #endif
-            return (_p - pp).norm();
+	    scalar l2 = (_p - pp).norm();
+            return l2/(_pnorm1*ppnorm1);
+            //return (_p - pp).norm();
         }
-
-
+	
         scalar dist(const Node* n) const         // L2 distance between current node and node n
         {
-            #ifdef PRINTVER
-            dist_count[level].fetch_add(1, std::memory_order_relaxed);
-            #endif
-            return (_p - n->_p).norm();
+	    return dist(n->_p, n->_pnorm1);
+            //return (_p - n->_p).norm();
         }
         Node* setChild(const pointType& pIns,    // insert a new child of current node with point pIns
+		       scalar norm,
                        unsigned UID = 0,
                        int new_id=-1)
         {
             Node* temp = new Node;
             temp->_p = pIns;
+            temp->_pnorm1 = norm;
             temp->level = level - 1;
             temp->maxdistUB = 0; // powdict[level + 1024];
             temp->ID = new_id;
@@ -175,7 +176,7 @@ public:
     // cover tree with one point as root
     SGTree(const pointType& p, int truncate = -1);
     // cover tree using points in the list between begin and end
-    SGTree(const Eigen::Map<matrixType>& pMatrix, int truncate = -1, unsigned cores = -1);
+    SGTree(const Eigen::Map<matrixType>& pMatrix, int truncate = -1, unsigned cores = -1, scalar base = 1.3, int scale_val = 20);
 
     /*** Destructor ***/
     /*** Destructor: deallocating all memories by a post order traversal ***/
@@ -183,7 +184,7 @@ public:
 
 /************************* Public API ***********************************************/
     /*** Construct cover tree using all points in the matrix in row-major form ***/
-    static SGTree* from_matrix(const Eigen::Map<matrixType>& pMatrix, int truncate = -1, unsigned cores = -1);
+    static SGTree* from_matrix(const Eigen::Map<matrixType>& pMatrix, int truncate = -1, unsigned cores = -1, scalar base = 1.3, int scale_val = 20);
 
     /*** Get root ***/
     Node* get_root() {return root;}

@@ -221,8 +221,9 @@ namespace utils
         void run()
         {
             res = pointType::Zero(pMatrix.cols());
-            for(size_t i = left; i<right; ++i)
-                res[i] = (pMatrix.col(i)-vec).norm();
+            for(size_t i = left; i<right; ++i) {
+                res[i] = ((pMatrix.col(i)-vec).norm())/((1 - pMatrix.col(i).norm())*(1 - vec.norm()));
+	    }
         }
 
     public:
